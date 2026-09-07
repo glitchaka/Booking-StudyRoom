@@ -1,0 +1,148 @@
+@page "/"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject BookingService Service
+<PageTitle>Agenda de salas</PageTitle>
+
+<section class="agenda-page">
+    <div class="agenda-toolbar">
+        <div class="date-nav">
+            <button class="icon-btn" @onclick="()=>MoveDay(-1)">‹</button>
+            <button class="today-btn" @onclick="()=>SelectDay(DateTime.Today)">Hoy</button>
+            <button class="icon-btn" @onclick="()=>MoveDay(1)">›</button>
+            <div class="date-title"><strong>@SelectedDate.ToString("dddd dd 'de' MMMM", Es)</strong><span>@SelectedDate.ToString("yyyy")</span></div>
+        </div>
+        <div class="toolbar-right">
+            <div class="rut-search"><span>⌕</span><input placeholder="Buscar RUT..." @bind="SearchRut" @bind:event="oninput" /><button @onclick="SearchHistory">Buscar</button></div>
+            <button class="secondary" @onclick="()=>showLegend=!showLegend">Estados</button>
+        </div>
+    </div>
+
+    <div class="week-strip">
+        @foreach (var day in WeekDays)
+        {
+            <button class="day-pill @(day.Date==SelectedDate.Date?"selected":"")" @onclick="()=>SelectDay(day)"><span>@day.ToString("ddd", Es)</span><strong>@day.Day</strong></button>
+        }
+    </div>
+
+    @if (showLegend)
+    {
+        <div class="legend"><span><i class="free"></i>Libre</span><span><i class="reserved"></i>Reservada</span><span><i class="inuse"></i>En uso</span><span><i class="warning"></i>Con antecedente</span><span><i class="done"></i>Finalizada</span></div>
+    }
+
+    <div class="schedule-wrap">
+        <div class="schedule-grid" style="grid-template-columns:88px repeat(@Rooms.Count, minmax(172px,1fr)) 66px;">
+            <div class="corner sticky-x sticky-y">Horario</div>
+            @foreach (var room in Rooms)
+            {
+                <div class="room-head sticky-y"><strong>@room.Name</strong><span>@RoomNowLabel(room.Id)</span></div>
+            }
+            <button class="add-room sticky-y" title="Agregar sala" @onclick="AddRoom">+</button>
+
+            @foreach (var slot in Slots)
+            {
+                <div class="time-cell sticky-x"><strong>@slot.ToString("HH:mm")</strong><span>@slot.AddMinutes(30).ToString("HH:mm")</span></div>
+                @foreach (var room in Rooms)
+                {
+                    var booking = BookingAt(room.Id, slot);
+                    <div class="slot-cell @(booking is null?"is-free":"has-booking")" @onclick="()=>CellClicked(room,slot,booking)">
+                        @if (booking is not null && booking.StartAt == slot)
+                        {
+                            var span = Math.Max(1, (int)Math.Ceiling((booking.EndAt-booking.StartAt).TotalMinutes/30));
+                            var history = HistoryCache.GetValueOrDefault(booking.Patron?.Rut ?? "");
+                            <div class="booking-card @BookingClass(booking,history)" style="height:calc(@span * 58px - 8px)">
+                                <div class="booking-top"><strong>@booking.Patron?.Name</strong>@if(history?.IsRepeatOffender==true){<span class="risk" title="Reincidente">!</span>}</div>
+                                <span class="rut">@FormatRut(booking.Patron?.Rut)</span>
+                                <div class="booking-meta"><span>@booking.StartAt.ToString("HH:mm")–@booking.EndAt.ToString("HH:mm")</span>@if(booking.MarkerAndEraser){<span>✎</span>}</div>
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="tail-cell"></div>
+            }
+        </div>
+    </div>
+</section>
+
+@if (showBookingDialog)
+{
+    <div class="modal-backdrop" @onclick="CloseDialogs"><div class="modal-card" @onclick:stopPropagation>
+        <div class="modal-head"><div><span>Nueva reserva</span><h2>@selectedRoom?.Name</h2></div><button class="close" @onclick="CloseDialogs">×</button></div>
+        <div class="slot-summary">@SelectedDate.ToString("dddd dd MMMM",Es) · @newStart.ToString("HH:mm")</div>
+        @if (!string.IsNullOrWhiteSpace(formError)) { <div class="alert danger">@formError</div> }
+        @if (lookupHistory is not null && lookupHistory.Incidents.Count>0)
+        {
+            <div class="patron-warning"><strong>@(lookupHistory.IsRepeatOffender?"⚠ Usuario reincidente":"Antecedente registrado")</strong><span>@lookupHistory.TotalBookings usos · @lookupHistory.Incidents.Count incidencia(s)</span><button @onclick="()=>showHistoryPanel=true">Ver historial</button></div>
+        }
+        <div class="form-grid">
+            <label>RUT<input @bind="newRut" @onblur="LookupPatron" placeholder="12.345.678-5" /></label>
+            <label>Nombre<input @bind="newName" placeholder="Nombre completo" /></label>
+            <label>Desde<input type="time" @bind="newStartTime" /></label>
+            <label>Hasta<input type="time" @bind="newEndTime" /></label>
+            <label class="toggle-row"><span>Plumón con borrador</span><input type="checkbox" @bind="newMarker" /></label>
+        </div>
+        <div class="modal-actions"><button class="ghost" @onclick="CloseDialogs">Cancelar</button><button class="primary" @onclick="SaveBooking">Guardar reserva</button></div>
+    </div></div>
+}
+
+@if (showDetail && selectedBooking is not null)
+{
+    <div class="drawer-backdrop" @onclick="CloseDialogs"><aside class="drawer" @onclick:stopPropagation>
+        <div class="modal-head"><div><span>@selectedBooking.Room?.Name</span><h2>@selectedBooking.Patron?.Name</h2></div><button class="close" @onclick="CloseDialogs">×</button></div>
+        <div class="detail-rut">@FormatRut(selectedBooking.Patron?.Rut)</div>
+        @if (detailHistory is not null)
+        {
+            <div class="history-summary @(detailHistory.IsRepeatOffender?"repeat":"")"><strong>@detailHistory.TotalBookings</strong><span>usos registrados</span><strong>@detailHistory.Incidents.Count</strong><span>incidencias</span></div>
+        }
+        <dl class="detail-list"><dt>Horario</dt><dd>@selectedBooking.StartAt.ToString("HH:mm") – @selectedBooking.EndAt.ToString("HH:mm")</dd><dt>Plumón + borrador</dt><dd>@(selectedBooking.MarkerAndEraser?"Sí":"No")</dd><dt>Estado</dt><dd>@StatusText(selectedBooking)</dd></dl>
+        @if(showCheckout)
+        {
+            <div class="checkout-box"><label>Comentario de entrega<textarea @bind="checkoutComment" rows="4" placeholder="Opcional. Registra información relevante del uso de la sala."></textarea></label><label class="check-line"><input type="checkbox" @bind="checkoutIncident" />Registrar como incidencia del usuario</label></div>
+        }
+        <div class="drawer-actions">
+            @if(!showCheckout){<button class="primary wide" @onclick="()=>showCheckout=true">Entregar sala</button>}
+            else {<button class="primary wide" @onclick="Checkout">Confirmar entrega</button>}
+            <button class="secondary wide" @onclick="()=>showHistoryPanel=true">Ver historial completo</button>
+            <button class="danger-link" @onclick="CancelBooking">Cancelar reserva</button>
+        </div>
+    </aside></div>
+}
+
+@if (showHistoryPanel && (lookupHistory ?? detailHistory) is { } h)
+{
+    <div class="drawer-backdrop top" @onclick="()=>showHistoryPanel=false"><aside class="drawer history-drawer" @onclick:stopPropagation>
+        <div class="modal-head"><div><span>Historial por RUT</span><h2>@h.Patron.Name</h2></div><button class="close" @onclick="()=>showHistoryPanel=false">×</button></div>
+        <div class="detail-rut">@FormatRut(h.Patron.Rut)</div>
+        <div class="history-summary @(h.IsRepeatOffender?"repeat":"")"><strong>@h.TotalBookings</strong><span>usos</span><strong>@h.Incidents.Count</strong><span>incidencias</span></div>
+        @if(h.Incidents.Count==0){<div class="empty-state">Sin incidencias registradas.</div>}
+        @foreach(var inc in h.Incidents){<article class="incident-card"><time>@inc.CreatedAt.ToString("dd/MM/yyyy HH:mm")</time><p>@inc.Comment</p></article>}
+    </aside></div>
+}
+
+@code {
+    static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CL");
+    DateTime SelectedDate = DateTime.Today;
+    List<StudyRoom> Rooms = []; List<Booking> Bookings = []; Dictionary<string,PatronHistory?> HistoryCache = [];
+    bool showLegend, showBookingDialog, showDetail, showCheckout, showHistoryPanel; StudyRoom? selectedRoom; Booking? selectedBooking;
+    string SearchRut="", newRut="", newName="", formError="", checkoutComment=""; bool newMarker, checkoutIncident; DateTime newStart;
+    string newStartTime="08:00", newEndTime="09:00"; PatronHistory? lookupHistory, detailHistory;
+    IEnumerable<DateTime> WeekDays { get { var diff=((int)SelectedDate.DayOfWeek+6)%7; var monday=SelectedDate.Date.AddDays(-diff); return Enumerable.Range(0,6).Select(i=>monday.AddDays(i)); } }
+    IEnumerable<DateTime> Slots => Enumerable.Range(0,22).Select(i=>SelectedDate.Date.AddHours(8).AddMinutes(i*30));
+    protected override async Task OnInitializedAsync()=>await Reload();
+    async Task Reload(){ Rooms=await Service.RoomsAsync(); Bookings=await Service.DayBookingsAsync(SelectedDate); HistoryCache.Clear(); foreach(var rut in Bookings.Select(b=>b.Patron?.Rut).Where(r=>!string.IsNullOrWhiteSpace(r)).Distinct()!) HistoryCache[rut!]=await Service.HistoryByRutAsync(rut!); }
+    async Task SelectDay(DateTime d){SelectedDate=d.Date; await Reload();}
+    async Task MoveDay(int d)=>await SelectDay(SelectedDate.AddDays(d));
+    async Task AddRoom(){await Service.AddRoomAsync(); Rooms=await Service.RoomsAsync();}
+    Booking? BookingAt(int roomId, DateTime slot)=>Bookings.FirstOrDefault(b=>b.RoomId==roomId && b.StartAt<=slot && b.EndAt>slot);
+    async Task CellClicked(StudyRoom room, DateTime slot, Booking? booking){ if(booking is not null){selectedBooking=booking;detailHistory=await Service.HistoryByRutAsync(booking.Patron?.Rut??"");showDetail=true;return;} selectedRoom=room;newStart=slot;newStartTime=slot.ToString("HH:mm");newEndTime=slot.AddHours(1).ToString("HH:mm");newRut=newName=formError="";newMarker=false;lookupHistory=null;showBookingDialog=true; }
+    async Task LookupPatron(){ if(string.IsNullOrWhiteSpace(newRut))return; lookupHistory=await Service.HistoryByRutAsync(newRut); if(lookupHistory is not null)newName=lookupHistory.Patron.Name; }
+    async Task SaveBooking(){ formError=""; if(selectedRoom is null)return; if(string.IsNullOrWhiteSpace(newName)){formError="Ingresa el nombre.";return;} if(!TimeSpan.TryParse(newStartTime,out var s)||!TimeSpan.TryParse(newEndTime,out var e)){formError="Revisa las horas.";return;} var (booking,error)=await Service.CreateAsync(selectedRoom.Id,newRut,newName,SelectedDate.Date+s,SelectedDate.Date+e,newMarker); if(error is not null){formError=error;return;} CloseDialogs(); await Reload(); }
+    async Task Checkout(){if(selectedBooking is null)return;await Service.CheckoutAsync(selectedBooking.Id,checkoutComment,checkoutIncident);CloseDialogs();await Reload();}
+    async Task CancelBooking(){if(selectedBooking is null)return;await Service.CancelAsync(selectedBooking.Id);CloseDialogs();await Reload();}
+    async Task SearchHistory(){ if(string.IsNullOrWhiteSpace(SearchRut))return;lookupHistory=await Service.HistoryByRutAsync(SearchRut); if(lookupHistory is not null)showHistoryPanel=true; }
+    void CloseDialogs(){showBookingDialog=showDetail=showCheckout=showHistoryPanel=false;checkoutComment="";checkoutIncident=false;}
+    string RoomNowLabel(int id){var now=DateTime.Now;if(SelectedDate.Date!=now.Date)return "";var b=Bookings.FirstOrDefault(x=>x.RoomId==id&&x.StartAt<=now&&x.EndAt>now);return b is null?"Libre ahora":"Ocupada ahora";}
+    static string StatusText(Booking b)=>b.Status switch{BookingStatus.Completed=>"Finalizada",BookingStatus.Cancelled=>"Cancelada",_ when b.StartAt<=DateTime.Now&&b.EndAt>DateTime.Now=>"En uso",_=>"Reservada"};
+    static string BookingClass(Booking b,PatronHistory? h)=>h?.IsRepeatOffender==true?"warning":b.Status==BookingStatus.Completed?"done":b.StartAt<=DateTime.Now&&b.EndAt>DateTime.Now?"inuse":"reserved";
+    static string FormatRut(string? r){if(string.IsNullOrWhiteSpace(r))return "";r=BookingService.NormalizeRut(r);return r.Length>1?$"{r[..^1]}-{r[^1]}":r;}
+}
