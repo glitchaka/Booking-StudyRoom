@@ -1,9 +1,11 @@
 bin/
 obj/
-Data/*.db
-Data/*.db-shm
-Data/*.db-wal
 .vs/
 .idea/
 *.user
 *.suo
+DataStore/*.db
+DataStore/*.db-shm
+DataStore/*.db-wal
+publish/
+Backups/

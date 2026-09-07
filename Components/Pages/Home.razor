@@ -1,148 +1,840 @@
 @page "/"
-@attribute [Authorize]
-@rendermode InteractiveServer
-@inject BookingService Service
-<PageTitle>Agenda de salas</PageTitle>
+@inject BookingService BookingService
+@inject AuthService Auth
+@inject NavigationManager Navigation
 
-<section class="agenda-page">
-    <div class="agenda-toolbar">
-        <div class="date-nav">
-            <button class="icon-btn" @onclick="()=>MoveDay(-1)">‹</button>
-            <button class="today-btn" @onclick="()=>SelectDay(DateTime.Today)">Hoy</button>
-            <button class="icon-btn" @onclick="()=>MoveDay(1)">›</button>
-            <div class="date-title"><strong>@SelectedDate.ToString("dddd dd 'de' MMMM", Es)</strong><span>@SelectedDate.ToString("yyyy")</span></div>
-        </div>
-        <div class="toolbar-right">
-            <div class="rut-search"><span>⌕</span><input placeholder="Buscar RUT..." @bind="SearchRut" @bind:event="oninput" /><button @onclick="SearchHistory">Buscar</button></div>
-            <button class="secondary" @onclick="()=>showLegend=!showLegend">Estados</button>
-        </div>
-    </div>
+<PageTitle>Agenda · Salas de estudio</PageTitle>
 
-    <div class="week-strip">
-        @foreach (var day in WeekDays)
-        {
-            <button class="day-pill @(day.Date==SelectedDate.Date?"selected":"")" @onclick="()=>SelectDay(day)"><span>@day.ToString("ddd", Es)</span><strong>@day.Day</strong></button>
-        }
-    </div>
+@if (!_ready)
+{
+    <div class="loading-page">Cargando agenda…</div>
+}
+else
+{
+    <div class="workspace">
+        <header class="topbar">
+            <div class="topbar-brand">
+                <div class="brand-mark small">B</div>
+                <div>
+                    <span class="eyebrow">BIBLIOTECA</span>
+                    <strong>Salas de estudio</strong>
+                </div>
+            </div>
 
-    @if (showLegend)
-    {
-        <div class="legend"><span><i class="free"></i>Libre</span><span><i class="reserved"></i>Reservada</span><span><i class="inuse"></i>En uso</span><span><i class="warning"></i>Con antecedente</span><span><i class="done"></i>Finalizada</span></div>
-    }
-
-    <div class="schedule-wrap">
-        <div class="schedule-grid" style="grid-template-columns:88px repeat(@Rooms.Count, minmax(172px,1fr)) 66px;">
-            <div class="corner sticky-x sticky-y">Horario</div>
-            @foreach (var room in Rooms)
-            {
-                <div class="room-head sticky-y"><strong>@room.Name</strong><span>@RoomNowLabel(room.Id)</span></div>
-            }
-            <button class="add-room sticky-y" title="Agregar sala" @onclick="AddRoom">+</button>
-
-            @foreach (var slot in Slots)
-            {
-                <div class="time-cell sticky-x"><strong>@slot.ToString("HH:mm")</strong><span>@slot.AddMinutes(30).ToString("HH:mm")</span></div>
-                @foreach (var room in Rooms)
+            <div class="topbar-actions">
+                <div class="rut-search">
+                    <span>⌕</span>
+                    <input @bind="_historyRut" @bind:event="oninput" placeholder="Buscar RUT" @onkeydown="HistorySearchKey" />
+                    <button title="Buscar historial" @onclick="OpenHistoryFromSearch">Buscar</button>
+                </div>
+                <button class="ghost-button" @onclick="OpenHistoryPanel">Historial</button>
+                @if (Auth.CurrentUser?.IsAdmin == true)
                 {
-                    var booking = BookingAt(room.Id, slot);
-                    <div class="slot-cell @(booking is null?"is-free":"has-booking")" @onclick="()=>CellClicked(room,slot,booking)">
-                        @if (booking is not null && booking.StartAt == slot)
-                        {
-                            var span = Math.Max(1, (int)Math.Ceiling((booking.EndAt-booking.StartAt).TotalMinutes/30));
-                            var history = HistoryCache.GetValueOrDefault(booking.Patron?.Rut ?? "");
-                            <div class="booking-card @BookingClass(booking,history)" style="height:calc(@span * 58px - 8px)">
-                                <div class="booking-top"><strong>@booking.Patron?.Name</strong>@if(history?.IsRepeatOffender==true){<span class="risk" title="Reincidente">!</span>}</div>
-                                <span class="rut">@FormatRut(booking.Patron?.Rut)</span>
-                                <div class="booking-meta"><span>@booking.StartAt.ToString("HH:mm")–@booking.EndAt.ToString("HH:mm")</span>@if(booking.MarkerAndEraser){<span>✎</span>}</div>
-                            </div>
-                        }
-                    </div>
+                    <button class="ghost-button" @onclick="OpenStaffPanel">Funcionarios</button>
                 }
-                <div class="tail-cell"></div>
+                <div class="user-chip">
+                    <span class="user-avatar">@Initials(Auth.CurrentUser?.DisplayName)</span>
+                    <div><strong>@Auth.CurrentUser?.DisplayName</strong><small>@Auth.CurrentUser?.Username</small></div>
+                </div>
+                <button class="icon-button" title="Cerrar sesión" @onclick="Logout">↪</button>
+            </div>
+        </header>
+
+        <section class="date-toolbar">
+            <div class="week-nav">
+                <button class="icon-button" @onclick="PreviousWeek">‹</button>
+                <div>
+                    <span class="eyebrow">SEMANA</span>
+                    <strong>@WeekLabel()</strong>
+                </div>
+                <button class="icon-button" @onclick="NextWeek">›</button>
+                <button class="today-button" @onclick="Today">Hoy</button>
+            </div>
+
+            <div class="day-tabs">
+                @foreach (var day in WeekDays())
+                {
+                    <button class="day-tab @(day.Date == _selectedDate.Date ? "active" : "")" @onclick="() => SelectDate(day)">
+                        <span>@day.ToString("ddd", _culture).ToUpperInvariant()</span>
+                        <strong>@day.Day</strong>
+                    </button>
+                }
+            </div>
+
+            <div class="legend">
+                <span><i class="legend-dot free"></i>Libre</span>
+                <span><i class="legend-dot reserved"></i>Reservada</span>
+                <span><i class="legend-dot active"></i>En uso</span>
+                <span><i class="legend-dot incident"></i>Incidencia</span>
+            </div>
+        </section>
+
+        <section class="schedule-card">
+            <div class="schedule-caption">
+                <div>
+                    <h1>@_selectedDate.ToString("dddd d 'de' MMMM", _culture)</h1>
+                    <p>@_rooms.Count salas · @_bookings.Count reservas</p>
+                </div>
+                <div class="schedule-summary">
+                    <span><strong>@AvailableNow()</strong> libres ahora</span>
+                    <span><strong>@InUseNow()</strong> en uso</span>
+                </div>
+            </div>
+
+            <div class="schedule-scroll">
+                <div class="schedule-grid" style="--room-count:@(_rooms.Count + 1)">
+                    <div class="time-column">
+                        <div class="time-header">Horario</div>
+                        <div class="time-body">
+                            @foreach (var slot in Slots())
+                            {
+                                <div class="time-slot @(slot.Minute == 0 ? "hour" : "half")">
+                                    @if (slot.Minute == 0)
+                                    {
+                                        <span>@slot.ToString("HH:mm")</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @foreach (var room in _rooms)
+                    {
+                        <div class="room-column">
+                            <div class="room-header">
+                                <div class="room-number">@room.Name</div>
+                                <div class="room-state @RoomStateClass(room)">@RoomStateText(room)</div>
+                            </div>
+                            <div class="room-body">
+                                @foreach (var slot in Slots())
+                                {
+                                    <button class="slot-cell @(slot.Minute == 0 ? "hour" : "half")"
+                                            title="Reservar @room.Name a las @slot.ToString("HH:mm")"
+                                            @onclick="() => OpenNewBooking(room, slot)"></button>
+                                }
+
+                                @foreach (var booking in RoomBookings(room.Id))
+                                {
+                                    <button class="booking-block @BookingClass(booking)"
+                                            style="top:@BookingTop(booking)px;height:@BookingHeight(booking)px"
+                                            @onclick="() => OpenBooking(booking)">
+                                        <div class="booking-head">
+                                            <strong>@booking.PatronName</strong>
+                                            @if (booking.IsIncident)
+                                            {
+                                                <span title="Incidencia">!</span>
+                                            }
+                                        </div>
+                                        <small>@BookingService.FormatRut(booking.Rut)</small>
+                                        <div class="booking-meta">
+                                            <span>@booking.StartAt.ToString("HH:mm")–@booking.EndAt.ToString("HH:mm")</span>
+                                            @if (booking.MarkerAndEraser)
+                                            {
+                                                <span title="Plumón y borrador">✎</span>
+                                            }
+                                        </div>
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="add-room-column">
+                        <button class="add-room-button" @onclick="AddRoom">
+                            <span>＋</span>
+                            <strong>Agregar sala</strong>
+                            <small>Se añadirá después de Sala @_rooms.Count</small>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+}
+
+@if (_showBookingForm)
+{
+    <div class="modal-backdrop" @onclick="CloseBookingForm">
+        <section class="modal" @onclick:stopPropagation>
+            <header class="modal-header">
+                <div>
+                    <span class="eyebrow">@(_editingBookingId is null ? "NUEVA RESERVA" : "EDITAR RESERVA")</span>
+                    <h2>@_formRoom?.Name · @_formStart.ToString("HH:mm")</h2>
+                </div>
+                <button class="icon-button" @onclick="CloseBookingForm">×</button>
+            </header>
+
+            <div class="form-grid two">
+                <div>
+                    <label>RUT</label>
+                    <input class="large-input" @bind="_formRut" @onblur="CheckRut" placeholder="12.345.678-5" />
+                </div>
+                <div>
+                    <label>Nombre</label>
+                    <input class="large-input" @bind="_formName" placeholder="Nombre de la persona" />
+                </div>
+                <div>
+                    <label>Hora de inicio</label>
+                    <input value="@_formStart.ToString("HH:mm")" disabled />
+                </div>
+                <div>
+                    <label>Hora de término</label>
+                    <select @bind="_formEndText">
+                        @foreach (var end in EndOptions())
+                        {
+                            <option value="@end.ToString("HH:mm")">@end.ToString("HH:mm")</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            <label class="toggle-row">
+                <input type="checkbox" @bind="_formMarker" />
+                <span>
+                    <strong>Entrega plumón con borrador</strong>
+                    <small>Quedará registrado junto a la reserva.</small>
+                </span>
+            </label>
+
+            @if (_formPatronSummary is not null)
+            {
+                <div class="patron-alert @(_formPatronSummary.IsRepeatOffender ? "danger" : "")">
+                    <div>
+                        <strong>@(_formPatronSummary.IsRepeatOffender ? "Usuario reincidente" : "Usuario conocido")</strong>
+                        <span>@_formPatronSummary.TotalUses usos · @_formPatronSummary.IncidentCount incidencias</span>
+                    </div>
+                    <button class="link-button" @onclick="() => OpenHistoryForRut(_formRut)">Ver historial</button>
+                </div>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_formError))
+            {
+                <div class="form-error">@_formError</div>
+            }
+
+            <footer class="modal-footer">
+                <button class="ghost-button" @onclick="CloseBookingForm">Cancelar</button>
+                <button class="primary-button" @onclick="SaveBooking">@(_editingBookingId is null ? "Guardar reserva" : "Guardar cambios")</button>
+            </footer>
+        </section>
+    </div>
+}
+
+@if (_selectedBooking is not null)
+{
+    <div class="drawer-backdrop" @onclick="CloseBookingDetail"></div>
+    <aside class="drawer">
+        <header class="drawer-header">
+            <div>
+                <span class="eyebrow">@_selectedBooking.Room?.Name</span>
+                <h2>@_selectedBooking.PatronName</h2>
+                <p>@BookingService.FormatRut(_selectedBooking.Rut)</p>
+            </div>
+            <button class="icon-button" @onclick="CloseBookingDetail">×</button>
+        </header>
+
+        <div class="detail-time">
+            <div><span>Inicio</span><strong>@_selectedBooking.StartAt.ToString("HH:mm")</strong></div>
+            <div class="time-arrow">→</div>
+            <div><span>Término</span><strong>@_selectedBooking.EndAt.ToString("HH:mm")</strong></div>
+        </div>
+
+        <div class="detail-list">
+            <div><span>Fecha</span><strong>@_selectedBooking.StartAt.ToString("dddd d MMM", _culture)</strong></div>
+            <div><span>Plumón + borrador</span><strong>@(_selectedBooking.MarkerAndEraser ? "Sí" : "No")</strong></div>
+            <div><span>Estado</span><strong>@BookingStatusText(_selectedBooking)</strong></div>
+        </div>
+
+        @if (_detailPatronSummary is not null)
+        {
+            <button class="history-summary @(_detailPatronSummary.IsRepeatOffender ? "danger" : "")" @onclick="() => OpenHistoryForRut(_selectedBooking.Rut)">
+                <span>@(_detailPatronSummary.IsRepeatOffender ? "⚠" : "↺")</span>
+                <div><strong>@_detailPatronSummary.TotalUses usos anteriores</strong><small>@_detailPatronSummary.IncidentCount incidencias registradas</small></div>
+                <b>›</b>
+            </button>
+        }
+
+        @if (_selectedBooking.IsDelivered)
+        {
+            <div class="return-note @(_selectedBooking.IsIncident ? "incident" : "")">
+                <span class="eyebrow">ENTREGA REGISTRADA</span>
+                <p>@(_selectedBooking.ReturnComment ?? "Sin comentario.")</p>
+            </div>
+        }
+        else if (_showDeliverForm)
+        {
+            <div class="deliver-form">
+                <label>Comentario al entregar</label>
+                <textarea @bind="_returnComment" rows="4" placeholder="Opcional. Ej.: retraso, daños, discusión, sala ordenada…"></textarea>
+                <label class="toggle-row compact">
+                    <input type="checkbox" @bind="_returnIncident" />
+                    <span><strong>Registrar como incidencia</strong><small>Quedará vinculada al RUT para futuras reservas.</small></span>
+                </label>
+                <div class="inline-actions">
+                    <button class="ghost-button" @onclick="() => _showDeliverForm = false">Volver</button>
+                    <button class="primary-button" @onclick="ConfirmDelivery">Confirmar entrega</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="drawer-actions">
+                <button class="primary-button full" @onclick="() => _showDeliverForm = true">Entregar sala</button>
+                <button class="ghost-button full" @onclick="EditSelectedBooking">Editar reserva</button>
+                <button class="danger-button full" @onclick="CancelSelectedBooking">Cancelar reserva</button>
+            </div>
+        }
+    </aside>
+}
+
+@if (_showHistoryPanel)
+{
+    <div class="drawer-backdrop" @onclick="CloseHistoryPanel"></div>
+    <aside class="drawer wide">
+        <header class="drawer-header">
+            <div>
+                <span class="eyebrow">HISTORIAL POR RUT</span>
+                <h2>@(_historySummary?.LastKnownName ?? "Buscar usuario")</h2>
+                @if (_historySummary is not null)
+                {
+                    <p>@BookingService.FormatRut(_historySummary.Rut)</p>
+                }
+            </div>
+            <button class="icon-button" @onclick="CloseHistoryPanel">×</button>
+        </header>
+
+        <div class="history-search-box">
+            <input @bind="_historyRut" placeholder="RUT" @onkeydown="HistorySearchKey" />
+            <button class="primary-button" @onclick="SearchHistory">Buscar</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_historyError))
+        {
+            <div class="form-error">@_historyError</div>
+        }
+
+        @if (_historySummary is not null)
+        {
+            <div class="history-kpis">
+                <div><strong>@_historySummary.TotalUses</strong><span>Usos</span></div>
+                <div class="@(_historySummary.IncidentCount > 0 ? "warn" : "")"><strong>@_historySummary.IncidentCount</strong><span>Incidencias</span></div>
+                <div><strong>@(_historySummary.LastUse?.ToString("dd/MM/yy") ?? "—")</strong><span>Último uso</span></div>
+            </div>
+
+            @if (_historySummary.IsRepeatOffender)
+            {
+                <div class="repeat-warning"><strong>⚠ Usuario reincidente</strong><span>Mostrará una advertencia al crear nuevas reservas.</span></div>
+            }
+
+            <div class="history-list">
+                @foreach (var item in _historyItems)
+                {
+                    <article class="history-item @(item.IsIncident ? "incident" : "")">
+                        <div class="history-date"><strong>@item.StartAt.Day</strong><span>@item.StartAt.ToString("MMM", _culture)</span></div>
+                        <div class="history-content">
+                            <div><strong>@item.Room?.Name</strong><span>@item.StartAt.ToString("HH:mm")–@item.EndAt.ToString("HH:mm")</span></div>
+                            <small>@(item.IsDelivered ? "Entregada" : "Sin entrega registrada") · Plumón: @(item.MarkerAndEraser ? "Sí" : "No")</small>
+                            @if (!string.IsNullOrWhiteSpace(item.ReturnComment))
+                            {
+                                <p>@item.ReturnComment</p>
+                            }
+                        </div>
+                        @if (item.IsIncident)
+                        {
+                            <span class="incident-badge">Incidencia</span>
+                        }
+                    </article>
+                }
+            </div>
+        }
+    </aside>
+}
+
+@if (_showStaffPanel)
+{
+    <div class="drawer-backdrop" @onclick="CloseStaffPanel"></div>
+    <aside class="drawer wide">
+        <header class="drawer-header">
+            <div>
+                <span class="eyebrow">ADMINISTRACIÓN</span>
+                <h2>Funcionarios</h2>
+                <p>Usuarios con acceso a la agenda</p>
+            </div>
+            <button class="icon-button" @onclick="CloseStaffPanel">×</button>
+        </header>
+
+        <div class="staff-create">
+            <h3>Agregar funcionario</h3>
+            <div class="form-grid two">
+                <div><label>Nombre</label><input @bind="_staffName" /></div>
+                <div><label>Usuario</label><input @bind="_staffUsername" /></div>
+                <div><label>Contraseña</label><input type="password" @bind="_staffPassword" /></div>
+                <label class="toggle-row compact"><input type="checkbox" @bind="_staffAdmin" /><span><strong>Administrador</strong><small>Puede administrar funcionarios.</small></span></label>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_staffError))
+            {
+                <div class="form-error">@_staffError</div>
+            }
+            <button class="primary-button" @onclick="CreateStaff">Guardar funcionario</button>
+        </div>
+
+        <div class="staff-list">
+            @foreach (var staff in _staffUsers)
+            {
+                <article class="staff-row">
+                    <span class="user-avatar">@Initials(staff.DisplayName)</span>
+                    <div class="staff-info"><strong>@staff.DisplayName</strong><small>@@@staff.Username · @(staff.IsAdmin ? "Administrador" : "Funcionario")</small></div>
+                    <span class="status-pill @(staff.IsActive ? "on" : "off")">@(staff.IsActive ? "Activo" : "Desactivado")</span>
+                    <button class="ghost-button small" @onclick="() => ToggleStaff(staff)">@(staff.IsActive ? "Desactivar" : "Activar")</button>
+                    <button class="ghost-button small" @onclick="() => BeginPasswordChange(staff)">Contraseña</button>
+                </article>
             }
         </div>
-    </div>
-</section>
 
-@if (showBookingDialog)
-{
-    <div class="modal-backdrop" @onclick="CloseDialogs"><div class="modal-card" @onclick:stopPropagation>
-        <div class="modal-head"><div><span>Nueva reserva</span><h2>@selectedRoom?.Name</h2></div><button class="close" @onclick="CloseDialogs">×</button></div>
-        <div class="slot-summary">@SelectedDate.ToString("dddd dd MMMM",Es) · @newStart.ToString("HH:mm")</div>
-        @if (!string.IsNullOrWhiteSpace(formError)) { <div class="alert danger">@formError</div> }
-        @if (lookupHistory is not null && lookupHistory.Incidents.Count>0)
+        @if (_passwordUser is not null)
         {
-            <div class="patron-warning"><strong>@(lookupHistory.IsRepeatOffender?"⚠ Usuario reincidente":"Antecedente registrado")</strong><span>@lookupHistory.TotalBookings usos · @lookupHistory.Incidents.Count incidencia(s)</span><button @onclick="()=>showHistoryPanel=true">Ver historial</button></div>
+            <div class="password-reset">
+                <strong>Cambiar contraseña · @_passwordUser.DisplayName</strong>
+                <input type="password" @bind="_newPassword" placeholder="Nueva contraseña" />
+                <button class="primary-button" @onclick="SavePassword">Guardar</button>
+                <button class="ghost-button" @onclick="CancelPasswordChange">Cancelar</button>
+            </div>
         }
-        <div class="form-grid">
-            <label>RUT<input @bind="newRut" @onblur="LookupPatron" placeholder="12.345.678-5" /></label>
-            <label>Nombre<input @bind="newName" placeholder="Nombre completo" /></label>
-            <label>Desde<input type="time" @bind="newStartTime" /></label>
-            <label>Hasta<input type="time" @bind="newEndTime" /></label>
-            <label class="toggle-row"><span>Plumón con borrador</span><input type="checkbox" @bind="newMarker" /></label>
-        </div>
-        <div class="modal-actions"><button class="ghost" @onclick="CloseDialogs">Cancelar</button><button class="primary" @onclick="SaveBooking">Guardar reserva</button></div>
-    </div></div>
-}
-
-@if (showDetail && selectedBooking is not null)
-{
-    <div class="drawer-backdrop" @onclick="CloseDialogs"><aside class="drawer" @onclick:stopPropagation>
-        <div class="modal-head"><div><span>@selectedBooking.Room?.Name</span><h2>@selectedBooking.Patron?.Name</h2></div><button class="close" @onclick="CloseDialogs">×</button></div>
-        <div class="detail-rut">@FormatRut(selectedBooking.Patron?.Rut)</div>
-        @if (detailHistory is not null)
-        {
-            <div class="history-summary @(detailHistory.IsRepeatOffender?"repeat":"")"><strong>@detailHistory.TotalBookings</strong><span>usos registrados</span><strong>@detailHistory.Incidents.Count</strong><span>incidencias</span></div>
-        }
-        <dl class="detail-list"><dt>Horario</dt><dd>@selectedBooking.StartAt.ToString("HH:mm") – @selectedBooking.EndAt.ToString("HH:mm")</dd><dt>Plumón + borrador</dt><dd>@(selectedBooking.MarkerAndEraser?"Sí":"No")</dd><dt>Estado</dt><dd>@StatusText(selectedBooking)</dd></dl>
-        @if(showCheckout)
-        {
-            <div class="checkout-box"><label>Comentario de entrega<textarea @bind="checkoutComment" rows="4" placeholder="Opcional. Registra información relevante del uso de la sala."></textarea></label><label class="check-line"><input type="checkbox" @bind="checkoutIncident" />Registrar como incidencia del usuario</label></div>
-        }
-        <div class="drawer-actions">
-            @if(!showCheckout){<button class="primary wide" @onclick="()=>showCheckout=true">Entregar sala</button>}
-            else {<button class="primary wide" @onclick="Checkout">Confirmar entrega</button>}
-            <button class="secondary wide" @onclick="()=>showHistoryPanel=true">Ver historial completo</button>
-            <button class="danger-link" @onclick="CancelBooking">Cancelar reserva</button>
-        </div>
-    </aside></div>
-}
-
-@if (showHistoryPanel && (lookupHistory ?? detailHistory) is { } h)
-{
-    <div class="drawer-backdrop top" @onclick="()=>showHistoryPanel=false"><aside class="drawer history-drawer" @onclick:stopPropagation>
-        <div class="modal-head"><div><span>Historial por RUT</span><h2>@h.Patron.Name</h2></div><button class="close" @onclick="()=>showHistoryPanel=false">×</button></div>
-        <div class="detail-rut">@FormatRut(h.Patron.Rut)</div>
-        <div class="history-summary @(h.IsRepeatOffender?"repeat":"")"><strong>@h.TotalBookings</strong><span>usos</span><strong>@h.Incidents.Count</strong><span>incidencias</span></div>
-        @if(h.Incidents.Count==0){<div class="empty-state">Sin incidencias registradas.</div>}
-        @foreach(var inc in h.Incidents){<article class="incident-card"><time>@inc.CreatedAt.ToString("dd/MM/yyyy HH:mm")</time><p>@inc.Comment</p></article>}
-    </aside></div>
+    </aside>
 }
 
 @code {
-    static readonly CultureInfo Es = CultureInfo.GetCultureInfo("es-CL");
-    DateTime SelectedDate = DateTime.Today;
-    List<StudyRoom> Rooms = []; List<Booking> Bookings = []; Dictionary<string,PatronHistory?> HistoryCache = [];
-    bool showLegend, showBookingDialog, showDetail, showCheckout, showHistoryPanel; StudyRoom? selectedRoom; Booking? selectedBooking;
-    string SearchRut="", newRut="", newName="", formError="", checkoutComment=""; bool newMarker, checkoutIncident; DateTime newStart;
-    string newStartTime="08:00", newEndTime="09:00"; PatronHistory? lookupHistory, detailHistory;
-    IEnumerable<DateTime> WeekDays { get { var diff=((int)SelectedDate.DayOfWeek+6)%7; var monday=SelectedDate.Date.AddDays(-diff); return Enumerable.Range(0,6).Select(i=>monday.AddDays(i)); } }
-    IEnumerable<DateTime> Slots => Enumerable.Range(0,22).Select(i=>SelectedDate.Date.AddHours(8).AddMinutes(i*30));
-    protected override async Task OnInitializedAsync()=>await Reload();
-    async Task Reload(){ Rooms=await Service.RoomsAsync(); Bookings=await Service.DayBookingsAsync(SelectedDate); HistoryCache.Clear(); foreach(var rut in Bookings.Select(b=>b.Patron?.Rut).Where(r=>!string.IsNullOrWhiteSpace(r)).Distinct()!) HistoryCache[rut!]=await Service.HistoryByRutAsync(rut!); }
-    async Task SelectDay(DateTime d){SelectedDate=d.Date; await Reload();}
-    async Task MoveDay(int d)=>await SelectDay(SelectedDate.AddDays(d));
-    async Task AddRoom(){await Service.AddRoomAsync(); Rooms=await Service.RoomsAsync();}
-    Booking? BookingAt(int roomId, DateTime slot)=>Bookings.FirstOrDefault(b=>b.RoomId==roomId && b.StartAt<=slot && b.EndAt>slot);
-    async Task CellClicked(StudyRoom room, DateTime slot, Booking? booking){ if(booking is not null){selectedBooking=booking;detailHistory=await Service.HistoryByRutAsync(booking.Patron?.Rut??"");showDetail=true;return;} selectedRoom=room;newStart=slot;newStartTime=slot.ToString("HH:mm");newEndTime=slot.AddHours(1).ToString("HH:mm");newRut=newName=formError="";newMarker=false;lookupHistory=null;showBookingDialog=true; }
-    async Task LookupPatron(){ if(string.IsNullOrWhiteSpace(newRut))return; lookupHistory=await Service.HistoryByRutAsync(newRut); if(lookupHistory is not null)newName=lookupHistory.Patron.Name; }
-    async Task SaveBooking(){ formError=""; if(selectedRoom is null)return; if(string.IsNullOrWhiteSpace(newName)){formError="Ingresa el nombre.";return;} if(!TimeSpan.TryParse(newStartTime,out var s)||!TimeSpan.TryParse(newEndTime,out var e)){formError="Revisa las horas.";return;} var (booking,error)=await Service.CreateAsync(selectedRoom.Id,newRut,newName,SelectedDate.Date+s,SelectedDate.Date+e,newMarker); if(error is not null){formError=error;return;} CloseDialogs(); await Reload(); }
-    async Task Checkout(){if(selectedBooking is null)return;await Service.CheckoutAsync(selectedBooking.Id,checkoutComment,checkoutIncident);CloseDialogs();await Reload();}
-    async Task CancelBooking(){if(selectedBooking is null)return;await Service.CancelAsync(selectedBooking.Id);CloseDialogs();await Reload();}
-    async Task SearchHistory(){ if(string.IsNullOrWhiteSpace(SearchRut))return;lookupHistory=await Service.HistoryByRutAsync(SearchRut); if(lookupHistory is not null)showHistoryPanel=true; }
-    void CloseDialogs(){showBookingDialog=showDetail=showCheckout=showHistoryPanel=false;checkoutComment="";checkoutIncident=false;}
-    string RoomNowLabel(int id){var now=DateTime.Now;if(SelectedDate.Date!=now.Date)return "";var b=Bookings.FirstOrDefault(x=>x.RoomId==id&&x.StartAt<=now&&x.EndAt>now);return b is null?"Libre ahora":"Ocupada ahora";}
-    static string StatusText(Booking b)=>b.Status switch{BookingStatus.Completed=>"Finalizada",BookingStatus.Cancelled=>"Cancelada",_ when b.StartAt<=DateTime.Now&&b.EndAt>DateTime.Now=>"En uso",_=>"Reservada"};
-    static string BookingClass(Booking b,PatronHistory? h)=>h?.IsRepeatOffender==true?"warning":b.Status==BookingStatus.Completed?"done":b.StartAt<=DateTime.Now&&b.EndAt>DateTime.Now?"inuse":"reserved";
-    static string FormatRut(string? r){if(string.IsNullOrWhiteSpace(r))return "";r=BookingService.NormalizeRut(r);return r.Length>1?$"{r[..^1]}-{r[^1]}":r;}
+    private readonly CultureInfo _culture = CultureInfo.GetCultureInfo("es-CL");
+    private const int DayStartHour = 8;
+    private const int DayEndHour = 20;
+    private const int SlotMinutes = 30;
+    private const double SlotHeight = 48;
+
+    private bool _ready;
+    private DateTime _selectedDate = DateTime.Today;
+    private List<Room> _rooms = [];
+    private List<Booking> _bookings = [];
+
+    private bool _showBookingForm;
+    private int? _editingBookingId;
+    private Room? _formRoom;
+    private DateTime _formStart;
+    private string _formEndText = "";
+    private string _formRut = "";
+    private string _formName = "";
+    private bool _formMarker;
+    private string? _formError;
+    private PatronSummary? _formPatronSummary;
+
+    private Booking? _selectedBooking;
+    private PatronSummary? _detailPatronSummary;
+    private bool _showDeliverForm;
+    private string _returnComment = "";
+    private bool _returnIncident;
+
+    private bool _showHistoryPanel;
+    private string _historyRut = "";
+    private string? _historyError;
+    private PatronSummary? _historySummary;
+    private List<Booking> _historyItems = [];
+
+    private bool _showStaffPanel;
+    private List<StaffUser> _staffUsers = [];
+    private string _staffName = "";
+    private string _staffUsername = "";
+    private string _staffPassword = "";
+    private bool _staffAdmin;
+    private string? _staffError;
+    private StaffUser? _passwordUser;
+    private string _newPassword = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Auth.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        await LoadDay();
+        _ready = true;
+    }
+
+    private async Task LoadDay()
+    {
+        _rooms = await BookingService.GetRoomsAsync();
+        _bookings = await BookingService.GetBookingsForDayAsync(_selectedDate);
+    }
+
+    private IEnumerable<DateTime> Slots()
+    {
+        var current = _selectedDate.Date.AddHours(DayStartHour);
+        var end = _selectedDate.Date.AddHours(DayEndHour);
+        while (current < end)
+        {
+            yield return current;
+            current = current.AddMinutes(SlotMinutes);
+        }
+    }
+
+    private IEnumerable<DateTime> EndOptions()
+    {
+        var current = _formStart.AddMinutes(SlotMinutes);
+        var end = _formStart.Date.AddHours(DayEndHour);
+        while (current <= end)
+        {
+            yield return current;
+            current = current.AddMinutes(SlotMinutes);
+        }
+    }
+
+    private IEnumerable<Booking> RoomBookings(int roomId)
+        => _bookings.Where(x => x.RoomId == roomId).OrderBy(x => x.StartAt);
+
+    private double BookingTop(Booking booking)
+        => (booking.StartAt - _selectedDate.Date.AddHours(DayStartHour)).TotalMinutes / SlotMinutes * SlotHeight;
+
+    private double BookingHeight(Booking booking)
+        => Math.Max(SlotHeight - 4, (booking.EndAt - booking.StartAt).TotalMinutes / SlotMinutes * SlotHeight - 4);
+
+    private string BookingClass(Booking booking)
+    {
+        if (booking.IsIncident && booking.IsDelivered) return "incident";
+        if (booking.IsDelivered) return "delivered";
+        var now = DateTime.Now;
+        if (booking.StartAt <= now && booking.EndAt > now) return "active";
+        if (booking.EndAt <= now) return "overdue";
+        return "reserved";
+    }
+
+    private string BookingStatusText(Booking booking)
+    {
+        if (booking.IsDelivered) return booking.IsIncident ? "Entregada con incidencia" : "Entregada";
+        if (booking.StartAt <= DateTime.Now && booking.EndAt > DateTime.Now) return "En uso";
+        if (booking.EndAt <= DateTime.Now) return "Entrega pendiente";
+        return "Reservada";
+    }
+
+    private string RoomStateText(Room room)
+    {
+        var now = DateTime.Now;
+        var current = RoomBookings(room.Id).FirstOrDefault(x => !x.IsDelivered && x.StartAt <= now && x.EndAt > now);
+        if (current is not null) return "En uso";
+        var next = RoomBookings(room.Id).FirstOrDefault(x => !x.IsDelivered && x.StartAt > now);
+        if (next is not null && _selectedDate.Date == DateTime.Today) return $"Próxima {next.StartAt:HH:mm}";
+        return "Libre";
+    }
+
+    private string RoomStateClass(Room room)
+    {
+        var text = RoomStateText(room);
+        if (text == "En uso") return "active";
+        if (text.StartsWith("Próxima")) return "next";
+        return "free";
+    }
+
+    private int InUseNow()
+    {
+        if (_selectedDate.Date != DateTime.Today) return 0;
+        var now = DateTime.Now;
+        return _bookings.Count(x => !x.IsDelivered && x.StartAt <= now && x.EndAt > now);
+    }
+
+    private int AvailableNow() => Math.Max(0, _rooms.Count - InUseNow());
+
+    private DateTime WeekStart()
+    {
+        var offset = ((int)_selectedDate.DayOfWeek + 6) % 7;
+        return _selectedDate.Date.AddDays(-offset);
+    }
+
+    private IEnumerable<DateTime> WeekDays()
+    {
+        var start = WeekStart();
+        for (var i = 0; i < 6; i++) yield return start.AddDays(i);
+    }
+
+    private string WeekLabel()
+    {
+        var start = WeekStart();
+        var end = start.AddDays(5);
+        return start.Month == end.Month
+            ? $"{start:dd}–{end:dd} {end.ToString("MMM", _culture)}"
+            : $"{start:dd MMM}–{end:dd MMM}";
+    }
+
+    private async Task SelectDate(DateTime day)
+    {
+        _selectedDate = day.Date;
+        await LoadDay();
+    }
+
+    private async Task PreviousWeek() => await SelectDate(_selectedDate.AddDays(-7));
+    private async Task NextWeek() => await SelectDate(_selectedDate.AddDays(7));
+    private async Task Today() => await SelectDate(DateTime.Today);
+
+    private async Task AddRoom()
+    {
+        await BookingService.AddRoomAsync();
+        _rooms = await BookingService.GetRoomsAsync();
+    }
+
+    private void OpenNewBooking(Room room, DateTime start)
+    {
+        var existing = RoomBookings(room.Id).FirstOrDefault(x => start < x.EndAt && start.AddMinutes(SlotMinutes) > x.StartAt);
+        if (existing is not null)
+        {
+            _ = OpenBooking(existing);
+            return;
+        }
+
+        _editingBookingId = null;
+        _formRoom = room;
+        _formStart = start;
+        _formEndText = start.AddHours(1) <= start.Date.AddHours(DayEndHour)
+            ? start.AddHours(1).ToString("HH:mm")
+            : start.AddMinutes(SlotMinutes).ToString("HH:mm");
+        _formRut = "";
+        _formName = "";
+        _formMarker = false;
+        _formError = null;
+        _formPatronSummary = null;
+        _showBookingForm = true;
+    }
+
+    private void CloseBookingForm()
+    {
+        _showBookingForm = false;
+        _editingBookingId = null;
+    }
+
+    private async Task CheckRut()
+    {
+        _formError = null;
+        if (string.IsNullOrWhiteSpace(_formRut)) return;
+        if (!BookingService.IsValidChileanRut(_formRut))
+        {
+            _formPatronSummary = null;
+            _formError = "El RUT ingresado no es válido.";
+            return;
+        }
+
+        _formPatronSummary = await BookingService.GetPatronSummaryAsync(_formRut);
+        if (_formPatronSummary is not null && string.IsNullOrWhiteSpace(_formName))
+            _formName = _formPatronSummary.LastKnownName;
+    }
+
+    private async Task SaveBooking()
+    {
+        if (_formRoom is null) return;
+        if (!TimeSpan.TryParse(_formEndText, out var endTime))
+        {
+            _formError = "Selecciona una hora de término válida.";
+            return;
+        }
+
+        var end = _formStart.Date.Add(endTime);
+        if (_editingBookingId is null)
+        {
+            var result = await BookingService.CreateBookingAsync(
+                _formRoom.Id, _formStart, end, _formRut, _formName, _formMarker, Auth.CurrentUser?.Id);
+            if (!result.Ok)
+            {
+                _formError = result.Error;
+                return;
+            }
+        }
+        else
+        {
+            var result = await BookingService.UpdateBookingAsync(
+                _editingBookingId.Value, _formRoom.Id, _formStart, end, _formRut, _formName, _formMarker);
+            if (!result.Ok)
+            {
+                _formError = result.Error;
+                return;
+            }
+        }
+
+        CloseBookingForm();
+        await LoadDay();
+    }
+
+    private async Task OpenBooking(Booking booking)
+    {
+        _selectedBooking = booking;
+        _showDeliverForm = false;
+        _returnComment = "";
+        _returnIncident = false;
+        _detailPatronSummary = await BookingService.GetPatronSummaryAsync(booking.Rut);
+    }
+
+    private void CloseBookingDetail()
+    {
+        _selectedBooking = null;
+        _showDeliverForm = false;
+    }
+
+    private void EditSelectedBooking()
+    {
+        if (_selectedBooking is null) return;
+        var room = _rooms.FirstOrDefault(x => x.Id == _selectedBooking.RoomId);
+        if (room is null) return;
+
+        _editingBookingId = _selectedBooking.Id;
+        _formRoom = room;
+        _formStart = _selectedBooking.StartAt;
+        _formEndText = _selectedBooking.EndAt.ToString("HH:mm");
+        _formRut = BookingService.FormatRut(_selectedBooking.Rut);
+        _formName = _selectedBooking.PatronName;
+        _formMarker = _selectedBooking.MarkerAndEraser;
+        _formPatronSummary = _detailPatronSummary;
+        _formError = null;
+        CloseBookingDetail();
+        _showBookingForm = true;
+    }
+
+    private async Task ConfirmDelivery()
+    {
+        if (_selectedBooking is null) return;
+        var id = _selectedBooking.Id;
+        await BookingService.DeliverAsync(id, _returnComment, _returnIncident);
+        CloseBookingDetail();
+        await LoadDay();
+    }
+
+    private async Task CancelSelectedBooking()
+    {
+        if (_selectedBooking is null) return;
+        await BookingService.CancelAsync(_selectedBooking.Id);
+        CloseBookingDetail();
+        await LoadDay();
+    }
+
+    private void OpenHistoryPanel()
+    {
+        _historyError = null;
+        _showHistoryPanel = true;
+    }
+
+    private async Task OpenHistoryFromSearch()
+    {
+        _showHistoryPanel = true;
+        await SearchHistory();
+    }
+
+    private async Task OpenHistoryForRut(string rut)
+    {
+        _historyRut = BookingService.FormatRut(rut);
+        _showHistoryPanel = true;
+        await SearchHistory();
+    }
+
+    private async Task HistorySearchKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await OpenHistoryFromSearch();
+    }
+
+    private async Task SearchHistory()
+    {
+        _historyError = null;
+        _historySummary = null;
+        _historyItems = [];
+
+        if (!BookingService.IsValidChileanRut(_historyRut))
+        {
+            _historyError = "Ingresa un RUT válido.";
+            return;
+        }
+
+        _historySummary = await BookingService.GetPatronSummaryAsync(_historyRut);
+        if (_historySummary is null)
+        {
+            _historyError = "No hay registros para este RUT.";
+            return;
+        }
+
+        _historyItems = await BookingService.GetPatronHistoryAsync(_historyRut);
+    }
+
+    private void CloseHistoryPanel() => _showHistoryPanel = false;
+
+    private async Task OpenStaffPanel()
+    {
+        _staffError = null;
+        _staffUsers = await Auth.GetUsersAsync();
+        _showStaffPanel = true;
+    }
+
+    private void CloseStaffPanel()
+    {
+        _showStaffPanel = false;
+        CancelPasswordChange();
+    }
+
+    private async Task CreateStaff()
+    {
+        _staffError = null;
+        var result = await Auth.CreateUserAsync(_staffName, _staffUsername, _staffPassword, _staffAdmin);
+        if (!result.Ok)
+        {
+            _staffError = result.Error;
+            return;
+        }
+
+        _staffName = "";
+        _staffUsername = "";
+        _staffPassword = "";
+        _staffAdmin = false;
+        _staffUsers = await Auth.GetUsersAsync();
+    }
+
+    private async Task ToggleStaff(StaffUser staff)
+    {
+        if (staff.Id == Auth.CurrentUser?.Id && staff.IsActive)
+        {
+            _staffError = "No puedes desactivar tu propia cuenta mientras la estás usando.";
+            return;
+        }
+        await Auth.SetActiveAsync(staff.Id, !staff.IsActive);
+        _staffUsers = await Auth.GetUsersAsync();
+    }
+
+    private void BeginPasswordChange(StaffUser staff)
+    {
+        _passwordUser = staff;
+        _newPassword = "";
+        _staffError = null;
+    }
+
+    private void CancelPasswordChange()
+    {
+        _passwordUser = null;
+        _newPassword = "";
+    }
+
+    private async Task SavePassword()
+    {
+        if (_passwordUser is null) return;
+        var result = await Auth.ChangePasswordAsync(_passwordUser.Id, _newPassword);
+        if (!result.Ok)
+        {
+            _staffError = result.Error;
+            return;
+        }
+        CancelPasswordChange();
+    }
+
+    private void Logout()
+    {
+        Auth.Logout();
+        Navigation.NavigateTo("/login");
+    }
+
+    private static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return string.Concat(parts.Take(2).Select(x => char.ToUpperInvariant(x[0])));
+    }
 }

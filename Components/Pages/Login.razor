@@ -1,17 +1,111 @@
 @page "/login"
-@attribute [AllowAnonymous]
-<PageTitle>Ingreso · Biblioteca</PageTitle>
-<div class="login-shell">
-    <div class="login-card">
-        <div class="brand-mark large">B</div>
-        <h1>Reserva de salas</h1>
-        <p>Acceso para personal de biblioteca</p>
-        @if (Navigation.Uri.Contains("error=1")) { <div class="alert danger">Usuario o contraseña incorrectos.</div> }
-        <form method="post" action="/account/login" class="form-stack">
-            <label>Usuario<input name="username" autocomplete="username" autofocus /></label>
-            <label>Contraseña<input name="password" type="password" autocomplete="current-password" /></label>
-            <button class="primary wide" type="submit">Ingresar</button>
-        </form>
-        <small>Cuenta inicial: admin · contraseña: biblioteca</small>
-    </div>
+@inject AuthService Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Acceso · Salas de estudio</PageTitle>
+
+<div class="login-page">
+    <section class="login-brand">
+        <div class="brand-mark">B</div>
+        <div>
+            <span class="eyebrow">BIBLIOTECA</span>
+            <h1>Salas de estudio</h1>
+            <p>Agenda interna y registro de uso.</p>
+        </div>
+    </section>
+
+    <section class="login-card">
+        @if (_loading)
+        {
+            <div class="loading-line">Cargando…</div>
+        }
+        else if (_firstSetup)
+        {
+            <span class="eyebrow">PRIMERA CONFIGURACIÓN</span>
+            <h2>Crear administrador</h2>
+            <p class="muted">Este usuario podrá crear las cuentas del resto del personal.</p>
+
+            <label>Nombre del funcionario</label>
+            <input @bind="_displayName" placeholder="Ej. Georgina Castro" />
+            <label>Usuario</label>
+            <input @bind="_username" placeholder="Ej. gcastro" />
+            <label>Contraseña</label>
+            <input @bind="_password" type="password" placeholder="Mínimo 6 caracteres" />
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="form-error">@_error</div>
+            }
+
+            <button class="primary-button full" @onclick="CreateAdmin">Crear y entrar</button>
+        }
+        else
+        {
+            <span class="eyebrow">ACCESO PERSONAL</span>
+            <h2>Ingresar</h2>
+
+            <label>Usuario</label>
+            <input @bind="_username" autofocus />
+            <label>Contraseña</label>
+            <input @bind="_password" type="password" @onkeydown="OnPasswordKey" />
+
+            @if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="form-error">@_error</div>
+            }
+
+            <button class="primary-button full" @onclick="Login">Entrar a la agenda</button>
+        }
+    </section>
 </div>
+
+@code {
+    private bool _loading = true;
+    private bool _firstSetup;
+    private string _displayName = "";
+    private string _username = "";
+    private string _password = "";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Auth.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        _firstSetup = !await Auth.HasUsersAsync();
+        _loading = false;
+    }
+
+    private async Task CreateAdmin()
+    {
+        _error = null;
+        var result = await Auth.CreateFirstAdminAsync(_displayName, _username, _password);
+        if (!result.Ok)
+        {
+            _error = result.Error;
+            return;
+        }
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task Login()
+    {
+        _error = null;
+        var result = await Auth.LoginAsync(_username, _password);
+        if (!result.Ok)
+        {
+            _error = result.Error;
+            return;
+        }
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task OnPasswordKey(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+            await Login();
+    }
+}

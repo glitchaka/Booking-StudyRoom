@@ -1,14 +1,5 @@
 @inherits LayoutComponentBase
+
 <div class="app-shell">
-    <header class="topbar">
-        <div class="brand-mark">B</div>
-        <div class="brand-copy"><strong>Biblioteca</strong><span>Reserva de salas de estudio</span></div>
-        <div class="top-actions">
-            <NavLink href="/" Match="NavLinkMatch.All">Agenda</NavLink>
-            <NavLink href="/historial">Historial</NavLink>
-            <NavLink href="/personal">Personal</NavLink>
-            <form method="post" action="/account/logout"><button class="ghost" type="submit">Salir</button></form>
-        </div>
-    </header>
-    <main>@Body</main>
+    @Body
 </div>

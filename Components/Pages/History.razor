@@ -1,7 +1,0 @@
-@page "/historial"
-@attribute [Authorize]
-@rendermode InteractiveServer
-@inject BookingService Service
-<PageTitle>Historial</PageTitle>
-<section class="simple-page"><div class="page-heading"><div><span>REGISTRO DE USUARIOS</span><h1>Historial por RUT</h1></div></div><div class="search-card"><input placeholder="Ingresa un RUT" @bind="rut" /><button class="primary" @onclick="Search">Buscar</button></div>@if(searched&&history is null){<div class="empty-state large">No hay registros para ese RUT.</div>}@if(history is not null){<div class="profile-card"><div><span>@FormatRut(history.Patron.Rut)</span><h2>@history.Patron.Name</h2></div><div class="profile-stats"><strong>@history.TotalBookings</strong><span>usos</span><strong class="@(history.IsRepeatOffender?"red":"")">@history.Incidents.Count</strong><span>incidencias</span></div></div><div class="timeline">@foreach(var i in history.Incidents){<article><time>@i.CreatedAt.ToString("dd MMM yyyy · HH:mm")</time><p>@i.Comment</p></article>}</div>}</section>
-@code{string rut="";bool searched;PatronHistory? history;async Task Search(){searched=true;history=await Service.HistoryByRutAsync(rut);}static string FormatRut(string r){r=BookingService.NormalizeRut(r);return r.Length>1?$"{r[..^1]}-{r[^1]}":r;}}
