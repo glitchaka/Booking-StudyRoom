@@ -1,0 +1,17 @@
+@page "/login"
+@attribute [AllowAnonymous]
+<PageTitle>Ingreso · Biblioteca</PageTitle>
+<div class="login-shell">
+    <div class="login-card">
+        <div class="brand-mark large">B</div>
+        <h1>Reserva de salas</h1>
+        <p>Acceso para personal de biblioteca</p>
+        @if (Navigation.Uri.Contains("error=1")) { <div class="alert danger">Usuario o contraseña incorrectos.</div> }
+        <form method="post" action="/account/login" class="form-stack">
+            <label>Usuario<input name="username" autocomplete="username" autofocus /></label>
+            <label>Contraseña<input name="password" type="password" autocomplete="current-password" /></label>
+            <button class="primary wide" type="submit">Ingresar</button>
+        </form>
+        <small>Cuenta inicial: admin · contraseña: biblioteca</small>
+    </div>
+</div>
