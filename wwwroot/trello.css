@@ -1,0 +1,669 @@
+/* Trello-style reservation board. Kept separate from app.css so login and existing dialogs remain intact. */
+:root {
+    --board-bg: #eef2f7;
+    --surface: #ffffff;
+    --surface-soft: #f7f8fa;
+    --line: #dfe4eb;
+    --text: #182230;
+    --muted: #687386;
+    --accent: #315f93;
+    --accent-strong: #244c79;
+    --accent-soft: #e9f1fb;
+    --free: #1f8d63;
+    --free-soft: #e5f6ef;
+    --active: #b66b17;
+    --active-soft: #fff1d8;
+    --incident: #b33d43;
+    --incident-soft: #fdebed;
+    --delivered: #667085;
+    --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 8px 24px rgba(16, 24, 40, .05);
+}
+
+html, body {
+    background: var(--board-bg);
+    color: var(--text);
+}
+
+.trello-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--board-bg);
+}
+
+.trello-loading {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--board-bg);
+}
+
+.trello-topbar {
+    min-height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 12px 22px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 30;
+}
+
+.trello-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 210px;
+}
+
+.trello-logo {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 900;
+    letter-spacing: -.03em;
+}
+
+.trello-brand-copy {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.trello-brand-copy small,
+.board-eyebrow {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+}
+
+.trello-brand-copy strong {
+    font-size: 17px;
+    margin-top: 3px;
+}
+
+.trello-top-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex: 1;
+}
+
+.board-search {
+    position: relative;
+    min-width: 270px;
+}
+
+.board-search span {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+}
+
+.board-search input {
+    width: 100%;
+    height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: var(--surface-soft);
+    padding: 0 12px 0 34px;
+    outline: none;
+}
+
+.board-search input:focus {
+    border-color: #9ab5d4;
+    box-shadow: 0 0 0 3px rgba(49,95,147,.12);
+    background: #fff;
+}
+
+.board-toolbar-button,
+.board-icon-button,
+.board-today,
+.room-add-button,
+.room-add-column,
+.board-view-chip {
+    font: inherit;
+}
+
+.board-toolbar-button {
+    min-height: 38px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--text);
+    border-radius: 9px;
+    padding: 0 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.board-toolbar-button:hover,
+.board-icon-button:hover,
+.board-today:hover {
+    background: #f4f6f8;
+}
+
+.board-icon-button {
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 9px;
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+}
+
+.board-user {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-left: 3px;
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
+}
+
+.board-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.board-user-text {
+    display: flex;
+    flex-direction: column;
+    max-width: 150px;
+}
+
+.board-user-text strong {
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.board-user-text small {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.board-datebar {
+    display: grid;
+    grid-template-columns: auto minmax(520px, 1fr) auto;
+    align-items: center;
+    gap: 18px;
+    padding: 14px 22px;
+    background: #fff;
+    border-bottom: 1px solid var(--line);
+}
+
+.board-week-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.board-week-copy {
+    min-width: 126px;
+    display: flex;
+    flex-direction: column;
+}
+
+.board-week-copy strong {
+    font-size: 14px;
+    margin-top: 1px;
+}
+
+.board-today {
+    height: 34px;
+    border: 1px solid var(--line);
+    background: #fff;
+    border-radius: 8px;
+    padding: 0 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.board-days {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(64px, 1fr));
+    gap: 6px;
+}
+
+.board-day {
+    height: 48px;
+    border: 1px solid transparent;
+    background: transparent;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.board-day span {
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.board-day strong {
+    font-size: 16px;
+    color: var(--text);
+}
+
+.board-day:hover {
+    background: #f5f7fa;
+}
+
+.board-day.active {
+    background: var(--accent-soft);
+    border-color: #c7d8ea;
+    color: var(--accent-strong);
+}
+
+.board-day.active strong {
+    color: var(--accent-strong);
+}
+
+.board-kpis {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.board-view-chip {
+    min-width: 86px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    border: 1px solid var(--line);
+    background: var(--surface-soft);
+    display: flex;
+    flex-direction: column;
+    line-height: 1.05;
+}
+
+.board-view-chip strong {
+    font-size: 15px;
+}
+
+.board-view-chip small {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.board-main {
+    padding: 18px 0 24px;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.board-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 0 22px 14px;
+}
+
+.board-heading h1 {
+    font-size: 22px;
+    line-height: 1.2;
+    margin: 3px 0 0;
+    text-transform: capitalize;
+}
+
+.board-heading p {
+    color: var(--muted);
+    margin: 4px 0 0;
+    font-size: 13px;
+}
+
+.board-legend {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.board-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--delivered);
+}
+
+.status-dot.free { background: var(--free); }
+.status-dot.reserved { background: var(--accent); }
+.status-dot.active { background: var(--active); }
+.status-dot.incident { background: var(--incident); }
+
+.board-message {
+    margin: 0 22px 12px;
+    padding: 10px 12px;
+    border: 1px solid #cfdaea;
+    background: #f2f7fd;
+    color: #2c527e;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.trello-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 22px 10px;
+    scrollbar-gutter: stable;
+}
+
+.trello-board {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: max-content;
+    min-width: 100%;
+}
+
+.room-list {
+    width: 288px;
+    min-width: 288px;
+    max-height: calc(100vh - 235px);
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #d8dee7;
+    border-radius: 12px;
+    background: #e8ebef;
+    box-shadow: 0 1px 2px rgba(16,24,40,.03);
+    transition: border-color .14s ease, box-shadow .14s ease, transform .14s ease;
+}
+
+.room-list.drop-target {
+    border-color: #88a9cd;
+}
+
+.room-list-header {
+    padding: 12px 12px 10px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.room-title {
+    min-width: 0;
+}
+
+.room-title strong {
+    display: block;
+    font-size: 15px;
+}
+
+.room-title small {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.room-state {
+    flex: 0 0 auto;
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 10px;
+    font-weight: 900;
+    background: #fff;
+    color: var(--muted);
+    border: 1px solid #d8dee7;
+}
+
+.room-state.free {
+    background: var(--free-soft);
+    color: #176c4d;
+    border-color: #bde2d3;
+}
+
+.room-state.active {
+    background: var(--active-soft);
+    color: #8b520f;
+    border-color: #efd09e;
+}
+
+.room-state.next {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+    border-color: #c7d8ea;
+}
+
+.room-list-body {
+    padding: 0 8px 8px;
+    overflow-y: auto;
+    min-height: 90px;
+}
+
+.room-empty {
+    margin: 0 2px 8px;
+    min-height: 84px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    border: 1px dashed #c9d0da;
+    border-radius: 10px;
+    color: #7a8494;
+    background: rgba(255,255,255,.42);
+    font-size: 12px;
+    padding: 12px;
+}
+
+.booking-card {
+    width: 100%;
+    border: 1px solid #d9dee6;
+    border-left: 4px solid var(--accent);
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 1px 1px rgba(16,24,40,.05);
+    margin-bottom: 8px;
+    padding: 10px 10px 9px;
+    text-align: left;
+    color: var(--text);
+    cursor: pointer;
+    transition: box-shadow .12s ease, transform .12s ease, border-color .12s ease;
+}
+
+.booking-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 14px rgba(16,24,40,.09);
+}
+
+.booking-card.reserved { border-left-color: var(--accent); }
+.booking-card.active { border-left-color: var(--active); background: #fffaf1; }
+.booking-card.overdue { border-left-color: #8b5d64; background: #fffafa; }
+.booking-card.delivered { border-left-color: var(--delivered); opacity: .78; }
+.booking-card.incident { border-left-color: var(--incident); background: #fff8f8; }
+
+.booking-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 7px;
+}
+
+.booking-time {
+    font-weight: 900;
+    color: #233b57;
+    font-size: 12px;
+    letter-spacing: .01em;
+}
+
+.booking-chip {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    border-radius: 999px;
+    padding: 4px 6px;
+    color: var(--muted);
+    background: #f1f3f6;
+}
+
+.booking-chip.active {
+    color: #8b520f;
+    background: var(--active-soft);
+}
+
+.booking-chip.incident {
+    color: #96383e;
+    background: var(--incident-soft);
+}
+
+.booking-person {
+    display: block;
+    font-size: 14px;
+    line-height: 1.25;
+    margin-bottom: 3px;
+}
+
+.booking-rut {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.booking-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 9px;
+    padding-top: 7px;
+    border-top: 1px solid #edf0f3;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.booking-marker {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.booking-marker.yes {
+    color: #315f93;
+}
+
+.room-add-button {
+    width: calc(100% - 16px);
+    margin: 0 8px 8px;
+    min-height: 38px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #495567;
+    text-align: left;
+    padding: 0 10px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.room-add-button:hover {
+    background: rgba(255,255,255,.72);
+}
+
+.room-add-column {
+    width: 250px;
+    min-width: 250px;
+    min-height: 52px;
+    border: 1px dashed #bdc7d3;
+    background: rgba(255,255,255,.55);
+    color: #546173;
+    border-radius: 12px;
+    padding: 0 15px;
+    text-align: left;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.room-add-column:hover {
+    background: #fff;
+    border-color: #9fafc1;
+}
+
+.room-add-column span {
+    margin-right: 6px;
+    font-size: 18px;
+}
+
+.board-form-hint {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+.drag-hint {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+@media (max-width: 1180px) {
+    .trello-topbar { align-items: flex-start; }
+    .trello-top-actions { flex-wrap: wrap; }
+    .board-datebar { grid-template-columns: 1fr; }
+    .board-week-nav { justify-content: center; }
+    .board-kpis { justify-content: center; }
+}
+
+@media (max-width: 760px) {
+    .trello-topbar {
+        position: static;
+        padding: 12px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .trello-brand { min-width: 0; }
+    .trello-top-actions { justify-content: flex-start; }
+    .board-search { min-width: 100%; width: 100%; }
+    .board-user { margin-left: auto; }
+    .board-datebar { padding: 10px 12px; gap: 10px; }
+    .board-days { overflow-x: auto; display: flex; padding-bottom: 2px; }
+    .board-day { min-width: 66px; }
+    .board-heading { padding: 0 12px 12px; align-items: flex-start; flex-direction: column; }
+    .board-legend { flex-wrap: wrap; }
+    .trello-scroll { padding: 0 12px 8px; }
+    .room-list { width: 270px; min-width: 270px; max-height: none; }
+    .board-message { margin-left: 12px; margin-right: 12px; }
+}
