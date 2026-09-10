@@ -7,148 +7,170 @@
 
 @if (!_ready)
 {
-    <div class="loading-page">Cargando agenda…</div>
+    <div class="trello-loading">Cargando agenda…</div>
 }
 else
 {
-    <div class="workspace">
-        <header class="topbar">
-            <div class="topbar-brand">
-                <div class="brand-mark small">B</div>
-                <div>
-                    <span class="eyebrow">BIBLIOTECA</span>
+    <div class="trello-page">
+        <header class="trello-topbar">
+            <div class="trello-brand">
+                <div class="trello-logo">B</div>
+                <div class="trello-brand-copy">
+                    <small>Biblioteca</small>
                     <strong>Salas de estudio</strong>
                 </div>
             </div>
 
-            <div class="topbar-actions">
-                <div class="rut-search">
+            <div class="trello-top-actions">
+                <div class="board-search">
                     <span>⌕</span>
-                    <input @bind="_historyRut" @bind:event="oninput" placeholder="Buscar RUT" @onkeydown="HistorySearchKey" />
-                    <button title="Buscar historial" @onclick="OpenHistoryFromSearch">Buscar</button>
+                    <input @bind="_boardSearch" @bind:event="oninput" placeholder="Filtrar reservas por nombre o RUT" />
                 </div>
-                <button class="ghost-button" @onclick="OpenHistoryPanel">Historial</button>
+                <button class="board-toolbar-button" @onclick="OpenHistoryPanel">Historial</button>
                 @if (Auth.CurrentUser?.IsAdmin == true)
                 {
-                    <button class="ghost-button" @onclick="OpenStaffPanel">Funcionarios</button>
+                    <button class="board-toolbar-button" @onclick="OpenStaffPanel">Funcionarios</button>
                 }
-                <div class="user-chip">
-                    <span class="user-avatar">@Initials(Auth.CurrentUser?.DisplayName)</span>
-                    <div><strong>@Auth.CurrentUser?.DisplayName</strong><small>@Auth.CurrentUser?.Username</small></div>
+                <div class="board-user">
+                    <span class="board-avatar">@Initials(Auth.CurrentUser?.DisplayName)</span>
+                    <div class="board-user-text">
+                        <strong>@Auth.CurrentUser?.DisplayName</strong>
+                        <small>@Auth.CurrentUser?.Username</small>
+                    </div>
                 </div>
-                <button class="icon-button" title="Cerrar sesión" @onclick="Logout">↪</button>
+                <button class="board-icon-button" title="Cerrar sesión" @onclick="Logout">↪</button>
             </div>
         </header>
 
-        <section class="date-toolbar">
-            <div class="week-nav">
-                <button class="icon-button" @onclick="PreviousWeek">‹</button>
-                <div>
-                    <span class="eyebrow">SEMANA</span>
+        <section class="board-datebar">
+            <div class="board-week-nav">
+                <button class="board-icon-button" title="Semana anterior" @onclick="PreviousWeek">‹</button>
+                <div class="board-week-copy">
+                    <span class="board-eyebrow">Semana</span>
                     <strong>@WeekLabel()</strong>
                 </div>
-                <button class="icon-button" @onclick="NextWeek">›</button>
-                <button class="today-button" @onclick="Today">Hoy</button>
+                <button class="board-icon-button" title="Semana siguiente" @onclick="NextWeek">›</button>
+                <button class="board-today" @onclick="Today">Hoy</button>
             </div>
 
-            <div class="day-tabs">
+            <div class="board-days">
                 @foreach (var day in WeekDays())
                 {
-                    <button class="day-tab @(day.Date == _selectedDate.Date ? "active" : "")" @onclick="() => SelectDate(day)">
+                    <button class="board-day @(day.Date == _selectedDate.Date ? "active" : "")" @onclick="() => SelectDate(day)">
                         <span>@day.ToString("ddd", _culture).ToUpperInvariant()</span>
                         <strong>@day.Day</strong>
                     </button>
                 }
             </div>
 
-            <div class="legend">
-                <span><i class="legend-dot free"></i>Libre</span>
-                <span><i class="legend-dot reserved"></i>Reservada</span>
-                <span><i class="legend-dot active"></i>En uso</span>
-                <span><i class="legend-dot incident"></i>Incidencia</span>
+            <div class="board-kpis">
+                <div class="board-view-chip">
+                    <strong>@_bookings.Count</strong>
+                    <small>Reservas</small>
+                </div>
+                <div class="board-view-chip">
+                    <strong>@InUseNow()</strong>
+                    <small>En uso</small>
+                </div>
+                <div class="board-view-chip">
+                    <strong>@AvailableNow()</strong>
+                    <small>Libres ahora</small>
+                </div>
             </div>
         </section>
 
-        <section class="schedule-card">
-            <div class="schedule-caption">
+        <main class="board-main">
+            <div class="board-heading">
                 <div>
+                    <span class="board-eyebrow">Tablero de salas</span>
                     <h1>@_selectedDate.ToString("dddd d 'de' MMMM", _culture)</h1>
-                    <p>@_rooms.Count salas · @_bookings.Count reservas</p>
+                    <p>Cada lista es una sala. Las reservas son tarjetas ordenadas por horario; puedes arrastrarlas a otra sala.</p>
                 </div>
-                <div class="schedule-summary">
-                    <span><strong>@AvailableNow()</strong> libres ahora</span>
-                    <span><strong>@InUseNow()</strong> en uso</span>
+                <div class="board-legend">
+                    <span><i class="status-dot free"></i>Libre</span>
+                    <span><i class="status-dot reserved"></i>Reservada</span>
+                    <span><i class="status-dot active"></i>En uso</span>
+                    <span><i class="status-dot incident"></i>Incidencia</span>
                 </div>
             </div>
 
-            <div class="schedule-scroll">
-                <div class="schedule-grid" style="--room-count:@(_rooms.Count + 1)">
-                    <div class="time-column">
-                        <div class="time-header">Horario</div>
-                        <div class="time-body">
-                            @foreach (var slot in Slots())
-                            {
-                                <div class="time-slot @(slot.Minute == 0 ? "hour" : "half")">
-                                    @if (slot.Minute == 0)
-                                    {
-                                        <span>@slot.ToString("HH:mm")</span>
-                                    }
-                                </div>
-                            }
-                        </div>
-                    </div>
+            @if (!string.IsNullOrWhiteSpace(_boardMessage))
+            {
+                <div class="board-message">@_boardMessage</div>
+            }
 
+            <div class="trello-scroll">
+                <div class="trello-board">
                     @foreach (var room in _rooms)
                     {
-                        <div class="room-column">
-                            <div class="room-header">
-                                <div class="room-number">@room.Name</div>
-                                <div class="room-state @RoomStateClass(room)">@RoomStateText(room)</div>
-                            </div>
-                            <div class="room-body">
-                                @foreach (var slot in Slots())
-                                {
-                                    <button class="slot-cell @(slot.Minute == 0 ? "hour" : "half")"
-                                            title="Reservar @room.Name a las @slot.ToString("HH:mm")"
-                                            @onclick="() => OpenNewBooking(room, slot)"></button>
-                                }
+                        <section class="room-list"
+                                 @ondragover:preventDefault="true"
+                                 @ondrop="() => DropOnRoom(room)">
+                            <header class="room-list-header">
+                                <div class="room-title">
+                                    <strong>@room.Name</strong>
+                                    <small>@RoomReservationCount(room.Id) · @RoomOccupiedMinutes(room.Id) min reservados</small>
+                                </div>
+                                <span class="room-state @RoomStateClass(room)">@RoomStateText(room)</span>
+                            </header>
 
-                                @foreach (var booking in RoomBookings(room.Id))
+                            <div class="room-list-body">
+                                @if (!FilteredRoomBookings(room.Id).Any())
                                 {
-                                    <button class="booking-block @BookingClass(booking)"
-                                            style="top:@BookingTop(booking)px;height:@BookingHeight(booking)px"
-                                            @onclick="() => OpenBooking(booking)">
-                                        <div class="booking-head">
-                                            <strong>@booking.PatronName</strong>
-                                            @if (booking.IsIncident)
-                                            {
-                                                <span title="Incidencia">!</span>
-                                            }
-                                        </div>
-                                        <small>@BookingService.FormatRut(booking.Rut)</small>
-                                        <div class="booking-meta">
-                                            <span>@booking.StartAt.ToString("HH:mm")–@booking.EndAt.ToString("HH:mm")</span>
-                                            @if (booking.MarkerAndEraser)
-                                            {
-                                                <span title="Plumón y borrador">✎</span>
-                                            }
-                                        </div>
-                                    </button>
+                                    <div class="room-empty">
+                                        @if (string.IsNullOrWhiteSpace(_boardSearch))
+                                        {
+                                            <span>Sin reservas para este día</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Sin coincidencias con el filtro</span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    @foreach (var booking in FilteredRoomBookings(room.Id))
+                                    {
+                                        <article class="booking-card @BookingClass(booking)"
+                                                 draggable="true"
+                                                 @ondragstart="() => BeginDrag(booking)"
+                                                 @ondragend="EndDrag"
+                                                 @onclick="() => OpenBooking(booking)">
+                                            <div class="booking-card-top">
+                                                <span class="booking-time">@booking.StartAt.ToString("HH:mm")–@booking.EndAt.ToString("HH:mm")</span>
+                                                <span class="booking-chip @BookingChipClass(booking)">@BookingShortStatus(booking)</span>
+                                            </div>
+                                            <strong class="booking-person">@booking.PatronName</strong>
+                                            <small class="booking-rut">@BookingService.FormatRut(booking.Rut)</small>
+                                            <div class="booking-card-footer">
+                                                <span class="booking-marker @(booking.MarkerAndEraser ? "yes" : "")">✎ Plumón: @(booking.MarkerAndEraser ? "Sí" : "No")</span>
+                                                @if (booking.IsIncident)
+                                                {
+                                                    <span>⚠ Incidencia</span>
+                                                }
+                                                else if (booking.IsDelivered)
+                                                {
+                                                    <span>✓ Entregada</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>Arrastrar ↔</span>
+                                                }
+                                            </div>
+                                        </article>
+                                    }
                                 }
                             </div>
-                        </div>
+
+                            <button class="room-add-button" @onclick="() => OpenNewBooking(room, SuggestedStart(room))">＋ Nueva reserva</button>
+                        </section>
                     }
 
-                    <div class="add-room-column">
-                        <button class="add-room-button" @onclick="AddRoom">
-                            <span>＋</span>
-                            <strong>Agregar sala</strong>
-                            <small>Se añadirá después de Sala @_rooms.Count</small>
-                        </button>
-                    </div>
+                    <button class="room-add-column" @onclick="AddRoom"><span>＋</span> Agregar sala</button>
                 </div>
             </div>
-        </section>
+        </main>
     </div>
 }
 
@@ -159,7 +181,7 @@ else
             <header class="modal-header">
                 <div>
                     <span class="eyebrow">@(_editingBookingId is null ? "NUEVA RESERVA" : "EDITAR RESERVA")</span>
-                    <h2>@_formRoom?.Name · @_formStart.ToString("HH:mm")</h2>
+                    <h2>@_formRoom?.Name · @_selectedDate.ToString("dd/MM/yyyy")</h2>
                 </div>
                 <button class="icon-button" @onclick="CloseBookingForm">×</button>
             </header>
@@ -175,7 +197,12 @@ else
                 </div>
                 <div>
                     <label>Hora de inicio</label>
-                    <input value="@_formStart.ToString("HH:mm")" disabled />
+                    <select value="@_formStartText" @onchange="StartChanged">
+                        @foreach (var start in StartOptions())
+                        {
+                            <option value="@start.ToString("HH:mm")">@start.ToString("HH:mm")</option>
+                        }
+                    </select>
                 </div>
                 <div>
                     <label>Hora de término</label>
@@ -187,6 +214,8 @@ else
                     </select>
                 </div>
             </div>
+
+            <p class="board-form-hint">El sistema impide superponer dos reservas en la misma sala.</p>
 
             <label class="toggle-row">
                 <input type="checkbox" @bind="_formMarker" />
@@ -408,18 +437,21 @@ else
     private const int DayStartHour = 8;
     private const int DayEndHour = 20;
     private const int SlotMinutes = 30;
-    private const double SlotHeight = 48;
 
     private bool _ready;
     private DateTime _selectedDate = DateTime.Today;
     private List<Room> _rooms = [];
     private List<Booking> _bookings = [];
+    private string _boardSearch = "";
+    private string? _boardMessage;
+    private int? _draggedBookingId;
 
     private bool _showBookingForm;
     private int? _editingBookingId;
     private Room? _formRoom;
     private DateTime _formStart;
-    private string _formEndText = "";
+    private string _formStartText = "08:00";
+    private string _formEndText = "09:00";
     private string _formRut = "";
     private string _formName = "";
     private bool _formMarker;
@@ -477,6 +509,8 @@ else
         }
     }
 
+    private IEnumerable<DateTime> StartOptions() => Slots();
+
     private IEnumerable<DateTime> EndOptions()
     {
         var current = _formStart.AddMinutes(SlotMinutes);
@@ -491,11 +525,26 @@ else
     private IEnumerable<Booking> RoomBookings(int roomId)
         => _bookings.Where(x => x.RoomId == roomId).OrderBy(x => x.StartAt);
 
-    private double BookingTop(Booking booking)
-        => (booking.StartAt - _selectedDate.Date.AddHours(DayStartHour)).TotalMinutes / SlotMinutes * SlotHeight;
+    private IEnumerable<Booking> FilteredRoomBookings(int roomId)
+    {
+        var bookings = RoomBookings(roomId);
+        if (string.IsNullOrWhiteSpace(_boardSearch)) return bookings;
 
-    private double BookingHeight(Booking booking)
-        => Math.Max(SlotHeight - 4, (booking.EndAt - booking.StartAt).TotalMinutes / SlotMinutes * SlotHeight - 4);
+        var term = _boardSearch.Trim();
+        var normalizedRut = BookingService.NormalizeRut(term);
+        return bookings.Where(x =>
+            x.PatronName.Contains(term, StringComparison.CurrentCultureIgnoreCase) ||
+            BookingService.NormalizeRut(x.Rut).Contains(normalizedRut, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string RoomReservationCount(int roomId)
+    {
+        var count = RoomBookings(roomId).Count();
+        return count == 1 ? "1 reserva" : $"{count} reservas";
+    }
+
+    private int RoomOccupiedMinutes(int roomId)
+        => (int)RoomBookings(roomId).Sum(x => (x.EndAt - x.StartAt).TotalMinutes);
 
     private string BookingClass(Booking booking)
     {
@@ -505,6 +554,21 @@ else
         if (booking.StartAt <= now && booking.EndAt > now) return "active";
         if (booking.EndAt <= now) return "overdue";
         return "reserved";
+    }
+
+    private string BookingChipClass(Booking booking)
+    {
+        if (booking.IsIncident) return "incident";
+        if (!booking.IsDelivered && booking.StartAt <= DateTime.Now && booking.EndAt > DateTime.Now) return "active";
+        return "";
+    }
+
+    private string BookingShortStatus(Booking booking)
+    {
+        if (booking.IsDelivered) return booking.IsIncident ? "Incidencia" : "Entregada";
+        if (booking.StartAt <= DateTime.Now && booking.EndAt > DateTime.Now) return "En uso";
+        if (booking.EndAt <= DateTime.Now) return "Pendiente";
+        return "Reservada";
     }
 
     private string BookingStatusText(Booking booking)
@@ -517,11 +581,18 @@ else
 
     private string RoomStateText(Room room)
     {
+        var roomBookings = RoomBookings(room.Id).ToList();
+        if (_selectedDate.Date != DateTime.Today)
+        {
+            if (roomBookings.Count == 0) return "Libre";
+            return roomBookings.Count == 1 ? "1 reserva" : $"{roomBookings.Count} reservas";
+        }
+
         var now = DateTime.Now;
-        var current = RoomBookings(room.Id).FirstOrDefault(x => !x.IsDelivered && x.StartAt <= now && x.EndAt > now);
+        var current = roomBookings.FirstOrDefault(x => !x.IsDelivered && x.StartAt <= now && x.EndAt > now);
         if (current is not null) return "En uso";
-        var next = RoomBookings(room.Id).FirstOrDefault(x => !x.IsDelivered && x.StartAt > now);
-        if (next is not null && _selectedDate.Date == DateTime.Today) return $"Próxima {next.StartAt:HH:mm}";
+        var next = roomBookings.FirstOrDefault(x => !x.IsDelivered && x.StartAt > now);
+        if (next is not null) return $"Próxima {next.StartAt:HH:mm}";
         return "Libre";
     }
 
@@ -529,7 +600,7 @@ else
     {
         var text = RoomStateText(room);
         if (text == "En uso") return "active";
-        if (text.StartsWith("Próxima")) return "next";
+        if (text.StartsWith("Próxima") || text.Contains("reserva")) return "next";
         return "free";
     }
 
@@ -540,7 +611,7 @@ else
         return _bookings.Count(x => !x.IsDelivered && x.StartAt <= now && x.EndAt > now);
     }
 
-    private int AvailableNow() => Math.Max(0, _rooms.Count - InUseNow());
+    private int AvailableNow() => _selectedDate.Date == DateTime.Today ? Math.Max(0, _rooms.Count - InUseNow()) : _rooms.Count;
 
     private DateTime WeekStart()
     {
@@ -566,6 +637,7 @@ else
     private async Task SelectDate(DateTime day)
     {
         _selectedDate = day.Date;
+        _boardMessage = null;
         await LoadDay();
     }
 
@@ -575,22 +647,43 @@ else
 
     private async Task AddRoom()
     {
-        await BookingService.AddRoomAsync();
+        var room = await BookingService.AddRoomAsync();
         _rooms = await BookingService.GetRoomsAsync();
+        _boardMessage = $"{room.Name} agregada al tablero.";
+    }
+
+    private DateTime SuggestedStart(Room room)
+    {
+        var dayStart = _selectedDate.Date.AddHours(DayStartHour);
+        var lastStart = _selectedDate.Date.AddHours(DayEndHour).AddMinutes(-SlotMinutes);
+        var candidate = dayStart;
+
+        if (_selectedDate.Date == DateTime.Today && DateTime.Now > dayStart)
+        {
+            var now = DateTime.Now;
+            var minutes = (int)Math.Ceiling(now.Minute / (double)SlotMinutes) * SlotMinutes;
+            candidate = new DateTime(now.Year, now.Month, now.Day, now.Hour, 0, 0).AddMinutes(minutes);
+            if (candidate < dayStart) candidate = dayStart;
+        }
+
+        while (candidate <= lastStart)
+        {
+            var end = candidate.AddHours(1);
+            if (end > _selectedDate.Date.AddHours(DayEndHour)) end = candidate.AddMinutes(SlotMinutes);
+            var overlaps = RoomBookings(room.Id).Any(x => candidate < x.EndAt && end > x.StartAt);
+            if (!overlaps) return candidate;
+            candidate = candidate.AddMinutes(SlotMinutes);
+        }
+
+        return lastStart;
     }
 
     private void OpenNewBooking(Room room, DateTime start)
     {
-        var existing = RoomBookings(room.Id).FirstOrDefault(x => start < x.EndAt && start.AddMinutes(SlotMinutes) > x.StartAt);
-        if (existing is not null)
-        {
-            _ = OpenBooking(existing);
-            return;
-        }
-
         _editingBookingId = null;
         _formRoom = room;
         _formStart = start;
+        _formStartText = start.ToString("HH:mm");
         _formEndText = start.AddHours(1) <= start.Date.AddHours(DayEndHour)
             ? start.AddHours(1).ToString("HH:mm")
             : start.AddMinutes(SlotMinutes).ToString("HH:mm");
@@ -600,6 +693,18 @@ else
         _formError = null;
         _formPatronSummary = null;
         _showBookingForm = true;
+    }
+
+    private void StartChanged(ChangeEventArgs args)
+    {
+        _formStartText = args.Value?.ToString() ?? "08:00";
+        if (!TimeSpan.TryParse(_formStartText, out var startTime)) return;
+
+        _formStart = _selectedDate.Date.Add(startTime);
+        var preferredEnd = _formStart.AddHours(1);
+        var dayEnd = _selectedDate.Date.AddHours(DayEndHour);
+        if (preferredEnd > dayEnd) preferredEnd = _formStart.AddMinutes(SlotMinutes);
+        _formEndText = preferredEnd.ToString("HH:mm");
     }
 
     private void CloseBookingForm()
@@ -627,35 +732,76 @@ else
     private async Task SaveBooking()
     {
         if (_formRoom is null) return;
-        if (!TimeSpan.TryParse(_formEndText, out var endTime))
+        if (!TimeSpan.TryParse(_formStartText, out var startTime) || !TimeSpan.TryParse(_formEndText, out var endTime))
         {
-            _formError = "Selecciona una hora de término válida.";
+            _formError = "Selecciona un horario válido.";
             return;
         }
 
-        var end = _formStart.Date.Add(endTime);
+        var start = _selectedDate.Date.Add(startTime);
+        var end = _selectedDate.Date.Add(endTime);
+
         if (_editingBookingId is null)
         {
             var result = await BookingService.CreateBookingAsync(
-                _formRoom.Id, _formStart, end, _formRut, _formName, _formMarker, Auth.CurrentUser?.Id);
+                _formRoom.Id, start, end, _formRut, _formName, _formMarker, Auth.CurrentUser?.Id);
             if (!result.Ok)
             {
                 _formError = result.Error;
                 return;
             }
+            _boardMessage = $"Reserva guardada en {_formRoom.Name}.";
         }
         else
         {
             var result = await BookingService.UpdateBookingAsync(
-                _editingBookingId.Value, _formRoom.Id, _formStart, end, _formRut, _formName, _formMarker);
+                _editingBookingId.Value, _formRoom.Id, start, end, _formRut, _formName, _formMarker);
             if (!result.Ok)
             {
                 _formError = result.Error;
                 return;
             }
+            _boardMessage = "Reserva actualizada.";
         }
 
         CloseBookingForm();
+        await LoadDay();
+    }
+
+    private void BeginDrag(Booking booking)
+    {
+        _draggedBookingId = booking.Id;
+        _boardMessage = $"Moviendo reserva de {booking.PatronName}. Suelta la tarjeta sobre otra sala.";
+    }
+
+    private void EndDrag()
+    {
+        _draggedBookingId = null;
+    }
+
+    private async Task DropOnRoom(Room room)
+    {
+        if (_draggedBookingId is null) return;
+        var booking = _bookings.FirstOrDefault(x => x.Id == _draggedBookingId.Value);
+        _draggedBookingId = null;
+        if (booking is null || booking.RoomId == room.Id) return;
+
+        var result = await BookingService.UpdateBookingAsync(
+            booking.Id,
+            room.Id,
+            booking.StartAt,
+            booking.EndAt,
+            booking.Rut,
+            booking.PatronName,
+            booking.MarkerAndEraser);
+
+        if (!result.Ok)
+        {
+            _boardMessage = $"No se pudo mover la reserva a {room.Name}: {result.Error}";
+            return;
+        }
+
+        _boardMessage = $"Reserva movida a {room.Name}.";
         await LoadDay();
     }
 
@@ -683,6 +829,7 @@ else
         _editingBookingId = _selectedBooking.Id;
         _formRoom = room;
         _formStart = _selectedBooking.StartAt;
+        _formStartText = _selectedBooking.StartAt.ToString("HH:mm");
         _formEndText = _selectedBooking.EndAt.ToString("HH:mm");
         _formRut = BookingService.FormatRut(_selectedBooking.Rut);
         _formName = _selectedBooking.PatronName;
@@ -699,6 +846,7 @@ else
         var id = _selectedBooking.Id;
         await BookingService.DeliverAsync(id, _returnComment, _returnIncident);
         CloseBookingDetail();
+        _boardMessage = _returnIncident ? "Entrega registrada con incidencia." : "Entrega registrada.";
         await LoadDay();
     }
 
@@ -707,6 +855,7 @@ else
         if (_selectedBooking is null) return;
         await BookingService.CancelAsync(_selectedBooking.Id);
         CloseBookingDetail();
+        _boardMessage = "Reserva cancelada.";
         await LoadDay();
     }
 
